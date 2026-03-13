@@ -1,0 +1,81 @@
+# Archivos existentes (los tuyos están bien, solo añade estos)
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Logs
+logs/
+*.log
+spring-boot-*.log
+
+# Archivos compilados
+*.class
+
+# Archivos de base de datos
+*.db
+*.h2.db
+
+# Archivos de configuración locales
+application-local.properties
+application-dev.properties
+application-*.properties
+!application.properties
+
+# Archivos temporales
+*~
+*.swp
+*.swo
+*.*~
+temp/
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+*.code-workspace
+
+### Spring Boot específico ###
+!/target/
+/target/*
+!target/*.jar
+heapdump.json
+/spring-boot-admin-sample.properties
+/spring-boot-admin-sample.yml
+
+### Archivos de dependencias ###
+dependency-reduced-pom.xml
+pom.xml.versionsBackup
+pom.xml.next
+release.properties

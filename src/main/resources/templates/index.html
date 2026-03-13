@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Refactorizador de Imports Java</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="container">
+    <form action="/refactor" method="post" enctype="multipart/form-data" id="refactorForm">
+        <input type="file" name="files" id="files" multiple accept=".java" required>
+        <input type="text" name="newPackage" id="newPackage"
+               placeholder="ej: com.nuevoproyecto"
+               pattern="[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*"
+               title="Formato de paquete válido: com.ejemplo"
+               required>
+        <button type="submit">Refactorizar y Descargar ZIP</button>
+    </form>
+</div>
+<script th:src="@{/js/script.js}"></script>
+</body>
+</html>

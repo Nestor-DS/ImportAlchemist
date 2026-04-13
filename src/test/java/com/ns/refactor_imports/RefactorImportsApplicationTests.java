@@ -1,17 +1,16 @@
 package com.ns.refactor_imports;
 
 import com.ns.refactor_imports.service.PackageDetectorService;
-import com.ns.refactor_imports.service.RefactorService;
 import com.ns.refactor_imports.util.FileProcessor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,58 +23,136 @@ class RefactorImportsApplicationTests {
     @Autowired
     private FileProcessor fileProcessor;
 
-    @Autowired
-    private RefactorService refactorService;
-
     @Test
-    void testDetectPackagesToRefactor() throws IOException {
-        // Given: Archivos de prueba
-        String estudianteContent = "package com.paquetevo;\n\npublic class Estudiante {\n    private String nombre;\n}";
-        String cursoContent = "import java.util.ArrayList;\nimport com.paquetevo.Estudiante;\n\npublic class Curso {\n\n    private String nombreCurso;\n    private ArrayList<paqueteviejo_pkh.Estudiante> estudiantes;\n\n    public Curso(String nombreCurso) {\n        this.nombreCurso = nombreCurso;\n        this.estudiantes = new ArrayList<>();\n    }\n}";
+    void detectPackages() throws Exception {
+        var student = file("Student.java", """
+                package com.newpackage;
 
-        MockMultipartFile estudianteFile = new MockMultipartFile(
-                "files", "Estudiante.java", "text/plain", estudianteContent.getBytes(StandardCharsets.UTF_8));
+                public class Student {
+                    private String name;
+                }""");
 
-        MockMultipartFile cursoFile = new MockMultipartFile(
-                "files", "Curso.java", "text/plain", cursoContent.getBytes(StandardCharsets.UTF_8));
+        var course = file("Course.java", """
+                import java.util.ArrayList;
+                import com.newpackage.Student;
 
-        List<MultipartFile> files = Arrays.asList(estudianteFile, cursoFile);
+                public class Course {
+                    private ArrayList<oldpackage_abc.Student> students;
+                }""");
 
-        // When: Detectamos paquetes a refactorizar
-        Set<String> packagesToRefactor = packageDetectorService.detectPackagesToRefactor(files);
+        var result = packageDetectorService.detectPackagesToRefactor(List.of(student, course));
 
-        // Then: Verificamos que detectó el paquete correcto
-        System.out.println("Paquetes detectados: " + packagesToRefactor);
-        assertNotNull(packagesToRefactor);
-        assertTrue(packagesToRefactor.contains("paqueteviejo_pkh"),
-                "Debería detectar paqueteviejo_pkh. Detectados: " + packagesToRefactor);
-        assertEquals(1, packagesToRefactor.size());
+        assertNotNull(result);
+        assertEquals(Set.of("com.newpackage", "oldpackage_abc"), result);
     }
+
     @Test
-    void testProcessFileWithGenericType() throws IOException {
-        // Given
-        String cursoContent = "import java.util.ArrayList;\nimport com.paquetevo.Estudiante;\n\npublic class Curso {\n\n    private String nombreCurso;\n    private ArrayList<paqueteviejo_pkh.Estudiante> estudiantes;\n\n    public Curso(String nombreCurso) {\n        this.nombreCurso = nombreCurso;\n        this.estudiantes = new ArrayList<>();\n    }\n}";
+    void processGenerics() {
+        var content = """
+                import java.util.ArrayList;
+                import com.newpackage.Student;
 
-        Set<String> oldPackages = new HashSet<>(Arrays.asList("paqueteviejo_pkh"));
-        String newPackage = "com.nuevopaquete";
+                public class Course {
+                    private ArrayList<oldpackage_abc.Student> students;
 
-        Map<String, Set<String>> classPackages = new HashMap<>();
-        classPackages.put("Estudiante", new HashSet<>(Arrays.asList("com.paquetevo")));
+                    public void test() {
+                        com.otherpackage.OtherClass o = new com.otherpackage.OtherClass();
+                    }
+                }""";
 
-        // When
-        String processedContent = fileProcessor.processFile(
-                cursoContent,
-                oldPackages,
-                newPackage,
-                classPackages
+        var result = process(content,
+                Set.of("com.newpackage", "oldpackage_abc", "com.otherpackage"), "new.target",
+                Map.of("Student", Set.of("com.newpackage"), "OtherClass", Set.of("com.otherpackage"))
         );
 
-        // Then
-        assertTrue(processedContent.contains("ArrayList<com.nuevopaquete.Estudiante>"),
-                "Debería reemplazar el tipo genérico");
-        assertFalse(processedContent.contains("paqueteviejo_pkh.Estudiante"),
-                "No debería quedar el paquete antiguo");
-        assertTrue(processedContent.contains("import com.paquetevo.Estudiante"),
-                "No debería cambiar el import correcto");
+        assertAll(
+                () -> assertTrue(result.contains("ArrayList<new.target.Student>")),
+                () -> assertTrue(result.contains("import new.target.Student")),
+                () -> assertTrue(result.contains("new.target.OtherClass")),
+                () -> assertFalse(result.contains("oldpackage_abc.Student")),
+                () -> assertFalse(result.contains("com.newpackage.Student")),
+                () -> assertFalse(result.contains("com.otherpackage.OtherClass"))
+        );
+    }
+
+    @Test
+    void processPackageDeclaration() {
+        var content = """
+                package com.newpackage;
+
+                public class Student {}""";
+
+        var result = process(content,
+                Set.of("com.newpackage"),
+                "new.target",
+                Map.of("Student", Set.of("com.newpackage"))
+        );
+
+        assertTrue(result.contains("package new.target;"));
+        assertFalse(result.contains("package com.newpackage;"));
+    }
+
+    @Test
+    void processMultipleReferences() {
+        var content = """
+                import com.newpackage.Student;
+                import java.util.List;
+
+                public class Main {
+                    public static void main(String[] args) {
+                        Student s = new Student();
+                        List<oldpackage_abc.Student> list = null;
+                        com.otherpackage.Teacher t = new com.otherpackage.Teacher();
+                    }
+                }""";
+
+        var result = process(content,
+                Set.of("com.newpackage", "oldpackage_abc", "com.otherpackage"),
+                "new.target.vo",
+                Map.of(
+                        "Student", Set.of("com.newpackage"),
+                        "Teacher", Set.of("com.otherpackage")
+                )
+        );
+
+        assertAll(
+                () -> assertTrue(result.contains("import new.target.vo.Student")),
+                () -> assertTrue(result.contains("List<new.target.vo.Student>")),
+                () -> assertTrue(result.contains("new.target.vo.Teacher")),
+                () -> assertFalse(result.contains("com.newpackage")),
+                () -> assertFalse(result.contains("oldpackage_abc")),
+                () -> assertFalse(result.contains("com.otherpackage"))
+        );
+    }
+
+    @Test
+    void noChanges() {
+        var content = """
+                import java.util.List;
+
+                public class Test {
+                    private List<String> items;
+                }""";
+
+        var result = process(content,
+                Set.of("com.newpackage"),
+                "new.target",
+                Map.of("Student", Set.of("com.newpackage"))
+        );
+
+        assertEquals(content.trim(), result.trim());
+    }
+
+    private MockMultipartFile file(String name, String content) {
+        return new MockMultipartFile(
+                "files",
+                name,
+                "text/plain",
+                content.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private String process(String content, Set<String> packages, String target, Map<String, Set<String>> classMap) {
+        return fileProcessor.processFile(content, packages, target, classMap);
     }
 }

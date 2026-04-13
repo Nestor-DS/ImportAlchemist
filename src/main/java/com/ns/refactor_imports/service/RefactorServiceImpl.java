@@ -24,9 +24,8 @@ public class RefactorServiceImpl implements RefactorService {
 
     @Override
     public byte[] refactorAndZip(RefactorRequest request) throws IOException {
-        Set<String> packagesToRefactor = packageDetectorService.detectPackagesToRefactor(
-                request.getFiles()
-        );
+
+        Set<String> packagesToRefactor = packageDetectorService.detectPackagesToRefactor(request.getFiles());
 
         Map<String, Set<String>> classPackages = buildClassPackageMap(request.getFiles());
 
@@ -43,8 +42,7 @@ public class RefactorServiceImpl implements RefactorService {
                     classPackages
             );
 
-            processedFiles.put(originalFileName,
-                    processedContent.getBytes(StandardCharsets.UTF_8));
+            processedFiles.put(originalFileName, processedContent.getBytes(StandardCharsets.UTF_8));
         }
 
         return createZip(processedFiles);
@@ -59,8 +57,9 @@ public class RefactorServiceImpl implements RefactorService {
             String declaredClassName = fileProcessor.extractDeclaredClassName(content);
             String declaredPackage = fileProcessor.extractDeclaredPackage(content);
 
-            if (declaredClassName != null && declaredPackage != null) {
-                classPackageMap.computeIfAbsent(declaredClassName, k -> new HashSet<>()).add(declaredPackage);
+            if (declaredClassName != null) {
+                String packageKey = declaredPackage != null ? declaredPackage : "";
+                classPackageMap.computeIfAbsent(declaredClassName, k -> new HashSet<>()).add(packageKey);
             }
         }
 

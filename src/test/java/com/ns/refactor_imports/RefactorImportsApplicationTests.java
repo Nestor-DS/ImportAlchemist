@@ -8,9 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -39,8 +37,8 @@ class RefactorImportsApplicationTests {
                 public class Course {
                     private ArrayList<oldpackage_abc.Student> students;
                 }""");
-
-        var result = packageDetectorService.detectPackagesToRefactor(List.of(student, course));
+        Collection<String> files = new ArrayList<>(Arrays.asList(student.toString(), course.toString()));
+        var result = packageDetectorService.detect(files);
 
         assertNotNull(result);
         assertEquals(Set.of("com.newpackage", "oldpackage_abc"), result);

@@ -1,116 +1,78 @@
 package com.ns.refactor_imports.service;
 
+import com.ns.refactor_imports.dto.DetectionResult;
+import com.ns.refactor_imports.util.Constants;
+import com.ns.refactor_imports.util.JavaSourceParser;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class PackageDetectorService {
 
-    private static final Pattern PACKAGE_PATTERN =
-            Pattern.compile("^package\\s+([a-zA-Z0-9_.]+)\\s*;", Pattern.MULTILINE);
+    private static final Logger logger = LoggerFactory.getLogger(PackageDetectorService.class);
 
-    private static final Pattern CLASS_NAME_PATTERN =
-            Pattern.compile("(?:public\\s+)?class\\s+(\\w+)");
+    public DetectionResult detect(Collection<String> fileContents) {
 
-    private static final Pattern IMPORT_PATTERN =
-            Pattern.compile("import\\s+([a-zA-Z0-9_.]+)\\s*;", Pattern.MULTILINE);
+        Set<String> knownClasses   = new HashSet<>();
+        Set<String> candidates     = new HashSet<>();
+        Set<String> namespaceRoots = new HashSet<>();
+        Map<String, Set<String>> classPackages = new HashMap<>();
 
-    private static final Pattern PACKAGE_REFERENCE_PATTERN =
-            Pattern.compile("([a-zA-Z][a-zA-Z0-9_]*(?:\\.[a-zA-Z][a-zA-Z0-9_]*)+)");
+        int skipped = 0;
 
-    public Set<String> detectPackagesToRefactor(List<MultipartFile> files) throws IOException {
-        Map<String, Set<String>> classPackageMap = buildClassPackageMap(files);
+        for (String content : fileContents) {
+            String pkg = JavaSourceParser.extractPackage(content);
+            String cls = JavaSourceParser.extractClassName(content);
 
-        Set<String> validImports = extractValidImports(files);
+            if (StringUtils.isBlank(cls)) {
+                skipped++;
+                continue;
+            }
 
-        Set<String> packagesToRefactor = new HashSet<>();
+            knownClasses.add(cls);
+            classPackages.computeIfAbsent(cls, k -> new HashSet<>()).add(StringUtils.defaultString(pkg));
 
-        for (MultipartFile file : files) {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-            String fileName = file.getOriginalFilename();
+            if (StringUtils.isNotBlank(pkg)) {
+                candidates.add(pkg);
+                namespaceRoots.add(topLevelSegment(pkg));
+            }
+        }
 
-            Matcher matcher = PACKAGE_REFERENCE_PATTERN.matcher(content);
+        for (String content : fileContents) {
+            for (JavaSourceParser.ImportEntry entry : JavaSourceParser.extractImports(content)) {
+                String fullPath   = entry.fullPath();
+                String simpleName = entry.simpleName();
 
-            while (matcher.find()) {
-                String reference = matcher.group(1);
+                if (isJdkImport(fullPath)) continue;
 
-                if (validImports.contains(reference) || reference.startsWith("java.") || reference.startsWith("javax.")) {
+                String importedPackage = fullPath.substring(0, fullPath.length() - simpleName.length() - 1);
+
+                if (knownClasses.contains(simpleName)) {
+                    candidates.add(importedPackage);
                     continue;
                 }
-
-                String[] parts = reference.split("\\.");
-                String className = parts[parts.length - 1];
-
-                String referencedPackage = String.join(".", Arrays.copyOf(parts, parts.length - 1));
-                if (classPackageMap.containsKey(className)) {
-                    Set<String> actualPackages = classPackageMap.get(className);
-
-                    if (!actualPackages.contains(referencedPackage)) {
-
-                        if (actualPackages.contains("") && !referencedPackage.isEmpty()) {
-                            packagesToRefactor.add(referencedPackage);
-                        }
-
-                        else if (!actualPackages.contains(referencedPackage) && !actualPackages.contains("")) {
-                            packagesToRefactor.add(referencedPackage);
-                        }
-                    }
-                }
+                if (namespaceRoots.contains(topLevelSegment(importedPackage))) candidates.add(importedPackage);
             }
         }
 
-        return packagesToRefactor;
+        logger.info("Detection completed: classes={}, candidates={}, skippedFiles={}", knownClasses.size(), candidates.size(), skipped);
+
+        return new DetectionResult(candidates, classPackages);
     }
 
-    private Map<String, Set<String>> buildClassPackageMap(List<MultipartFile> files) throws IOException {
-        Map<String, Set<String>> classPackageMap = new HashMap<>();
+    private String topLevelSegment(String pkg) {
+        int dot = pkg.indexOf('.');
+        return dot == -1 ? pkg : pkg.substring(0, dot);
+    }
 
-        for (MultipartFile file : files) {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-
-            String declaredPackage = extractDeclaredPackage(content);
-            String declaredClassName = extractDeclaredClassName(content);
-
-            if (declaredClassName != null) {
-                if (declaredPackage != null) {
-                    classPackageMap.computeIfAbsent(declaredClassName, k -> new HashSet<>()).add(declaredPackage);
-                } else {
-                    classPackageMap.computeIfAbsent(declaredClassName, k -> new HashSet<>()).add("");
-                }
-            }
+    private boolean isJdkImport(String fullPath) {
+        for (String prefix : Constants.JDK_PREFIXES) {
+            if (fullPath.startsWith(prefix)) return true;
         }
-
-        return classPackageMap;
-    }
-
-    private Set<String> extractValidImports(List<MultipartFile> files) throws IOException {
-        Set<String> validImports = new HashSet<>();
-
-        for (MultipartFile file : files) {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-            Matcher matcher = IMPORT_PATTERN.matcher(content);
-
-            while (matcher.find()) {
-                validImports.add(matcher.group(1));
-            }
-        }
-
-        return validImports;
-    }
-
-    private String extractDeclaredPackage(String content) {
-        Matcher matcher = PACKAGE_PATTERN.matcher(content);
-        return matcher.find() ? matcher.group(1) : null;
-    }
-
-    private String extractDeclaredClassName(String content) {
-        Matcher matcher = CLASS_NAME_PATTERN.matcher(content);
-        return matcher.find() ? matcher.group(1) : null;
+        return false;
     }
 }

@@ -80,3 +80,36 @@ curl -X POST http://localhost:8080/refactor \
   -F "newPackage=com.example" \
   --output refactored_files.zip
 ```
+
+
+@Target({ElementType.FIELD})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = SinAcentosValidator.class)
+public @interface SinAcentos {
+
+    String message() default "No se permiten acentos";
+
+    Class<?>[] groups() default {};
+
+    Class<? extends Payload>[] payload() default {};
+}
+
+_____
+
+public class SinAcentosValidator
+        implements ConstraintValidator<SinAcentos, String> {
+
+    @Override
+    public boolean isValid(String value,
+                           ConstraintValidatorContext context) {
+
+        if (value == null) {
+            return true;
+        }
+
+        return value.equals(
+            Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+        );
+    }
+}

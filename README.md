@@ -1,36 +1,38 @@
 const parent = document.querySelector('#mi-form'); // o document.body
 
 const observer = new MutationObserver((mutations) => {
-  mutations.forEach((mutation) => {
+ mutations.forEach((mutation) => {
 
-    // ✅ Cambió class, id, type, etc.
-    if (mutation.type === 'attributes') {
-      const el = mutation.target;
-      console.log(`Atributo "${mutation.attributeName}" cambió en:`, el);
-      console.log('Antes:', mutation.oldValue);
-      console.log('Ahora:', el.getAttribute(mutation.attributeName));
-    }
+   // Cambió un atributo (class, id, type, etc.)
+   if (mutation.type === 'attributes') {
+     const tenia = mutation.oldValue?.includes('required');
+     const tiene = mutation.target.classList.contains('required');
 
-    // ✅ Se eliminó un input
-    mutation.removedNodes.forEach((node) => {
-      if (node.tagName === 'INPUT') {
-        console.log('Input eliminado:', node);
-      }
-    });
+     if (tenia || tiene) {
+       location.reload();
+     }
+   }
 
-    // ✅ Se añadió un input
-    mutation.addedNodes.forEach((node) => {
-      if (node.tagName === 'INPUT') {
-        console.log('Input añadido:', node);
-      }
-    });
+   // Se eliminó un input.required
+   mutation.removedNodes.forEach((node) => {
+     if (node.tagName === 'INPUT' && node.classList.contains('required')) {
+       location.reload();
+     }
+   });
 
-  });
+   // Se añadió un input.required
+   mutation.addedNodes.forEach((node) => {
+     if (node.tagName === 'INPUT' && node.classList.contains('required')) {
+       location.reload();
+     }
+   });
+
+ });
 });
 
 observer.observe(parent, {
-  attributes: true,        // Para detectar cambios de atributos
-  attributeOldValue: true, // Guarda el valor anterior
-  childList: true,         // Para detectar nodos añadidos/eliminados
-  subtree: true            // Aplica a todos los descendientes del padre
+ attributes: true,
+ attributeOldValue: true,
+ childList: true,
+ subtree: true
 });

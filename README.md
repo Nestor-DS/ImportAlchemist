@@ -1,38 +1,83 @@
-const parent = document.querySelector('#mi-form'); // o document.body
+<script>
+  // ─── Configuración ────────────────────────────────────────────────
+  const REQUIRED_FIELDS = [
+    { selector: '#nombre', type: 'input' },
+    { selector: '#email',  type: 'input' },
+    { selector: '#pais',   type: 'select' },
+  ];
 
-const observer = new MutationObserver((mutations) => {
- mutations.forEach((mutation) => {
+  // ─── 1. Fingerprints ──────────────────────────────────────────────
+  const fieldFingerprints = new Map();
 
-   // Cambió un atributo (class, id, type, etc.)
-   if (mutation.type === 'attributes') {
-     const tenia = mutation.oldValue?.includes('required');
-     const tiene = mutation.target.classList.contains('required');
+  function captureFingerprints() {
+    REQUIRED_FIELDS.forEach(({ selector }) => {
+      const el = document.querySelector(selector);
+      if (el) {
+        fieldFingerprints.set(selector, {
+          id:       el.id,
+          name:     el.name,
+          tagName:  el.tagName,
+          required: el.hasAttribute('required'),
+        });
+      }
+    });
+  }
 
-     if (tenia || tiene) {
-       location.reload();
-     }
-   }
+  // ─── 2. Integridad ────────────────────────────────────────────────
+  function verifyIntegrity() {
+    const errors = [];
 
-   // Se eliminó un input.required
-   mutation.removedNodes.forEach((node) => {
-     if (node.tagName === 'INPUT' && node.classList.contains('required')) {
-       location.reload();
-     }
-   });
+    for (const [selector, original] of fieldFingerprints) {
+      const el = document.querySelector(selector);
 
-   // Se añadió un input.required
-   mutation.addedNodes.forEach((node) => {
-     if (node.tagName === 'INPUT' && node.classList.contains('required')) {
-       location.reload();
-     }
-   });
+      if (!el) {
+        errors.push(`Campo eliminado del DOM: ${selector}`);
+        continue;
+      }
+      if (el.id !== original.id)
+        errors.push(`ID alterado en: ${selector}`);
+      if (el.name !== original.name)
+        errors.push(`name alterado en: ${selector}`);
+      if (!el.hasAttribute('required'))
+        errors.push(`Atributo required removido en: ${selector}`);
+    }
 
- });
-});
+    return errors;
+  }
 
-observer.observe(parent, {
- attributes: true,
- attributeOldValue: true,
- childList: true,
- subtree: true
-});
+  // ─── 3. Valores ───────────────────────────────────────────────────
+  function validateValues() {
+    const errors = [];
+
+    REQUIRED_FIELDS.forEach(({ selector }) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+
+      const value = el.value?.trim();
+      if (!value || value === '' || value === 'null' || value === 'undefined') {
+        errors.push(`Campo vacío: ${selector}`);
+      }
+    });
+
+    return errors;
+  }
+
+  // ─── Submit ───────────────────────────────────────────────────────
+  document.querySelector('#miFormulario').addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const allErrors = [...verifyIntegrity(), ...validateValues()];
+
+    if (allErrors.length > 0) {
+      console.warn('Validación fallida:', allErrors);
+      alert('Errores de validación:\n' + allErrors.join('\n'));
+      return;
+    }
+
+    console.log('Formulario válido ✓');
+    // submitForm();
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', captureFingerprints);
+</script>
